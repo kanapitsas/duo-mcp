@@ -1,8 +1,8 @@
 ## Peer review with Claude (duo-mcp)
 
 You can consult Claude, an independent agent from a different model family, with the `duo` MCP tools
-(`ask_claude`, `review_with_claude`, `continue_claude`). It works read-only in this repository and makes
-different mistakes than you do. Use it when:
+(`ask_claude`, `review_with_claude`, `continue_claude`). It investigates this repository without editing it and
+makes different mistakes than you do. Use it when:
 
 - an important decision is ambiguous, or several plausible explanations exist;
 - your confidence is low, or debugging is stuck;

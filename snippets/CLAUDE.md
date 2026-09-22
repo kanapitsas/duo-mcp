@@ -1,8 +1,8 @@
 ## Peer review with Codex (duo-mcp)
 
 You can consult Codex, an independent agent from a different model family, with the `duo` MCP tools
-(`ask_codex`, `review_with_codex`, `continue_codex`). It works read-only in this repository and makes
-different mistakes than you do. Use it when:
+(`ask_codex`, `review_with_codex`, `continue_codex`). It investigates this repository without editing it and
+makes different mistakes than you do. Use it when:
 
 - an important decision is ambiguous, or several plausible explanations exist;
 - your confidence is low, or debugging is stuck;
