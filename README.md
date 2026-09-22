@@ -7,8 +7,8 @@ The two models make different mistakes. By default the peer gets a neutral quest
 evidence. The caller settles any disagreement from evidence. The goal is useful disagreement, not consensus.
 
 ```
-duo-mcp for-claude   # server for Claude Code → ask_codex, review_with_codex, continue_codex
-duo-mcp for-codex    # server for Codex       → ask_claude, review_with_claude, continue_claude
+duo-mcp for-claude   # server for Claude Code → ask_codex, review_with_codex, continue_codex, get_codex_result, cancel_codex
+duo-mcp for-codex    # server for Codex       → ask_claude, review_with_claude, continue_claude, get_claude_result, cancel_claude
 duo-mcp doctor       # detected CLIs, config, valid models and efforts
 ```
 
@@ -34,7 +34,7 @@ claude mcp add-json -s user duo \
 
 `timeout` (ms) is Claude Code's per-call limit. Keep it above duo-mcp's `timeout_sec` (900s by default).
 Only new sessions see the server. For headless `claude -p`, add
-`--allowedTools mcp__duo__ask_codex mcp__duo__review_with_codex mcp__duo__continue_codex`.
+`--allowedTools "mcp__duo__*"`.
 
 ### Register with Codex (CLI and desktop app)
 
@@ -62,6 +62,8 @@ Paste [`snippets/CLAUDE.md`](snippets/CLAUDE.md) into `~/.claude/CLAUDE.md` and
 | `ask_<peer>(question, mode?, context?, model?, effort?, cwd?)` | New investigation. `mode="independent"` (default): neutral question, `context` holds facts only. `mode="debate"`: `context` holds your position, and the peer tries to break it. |
 | `review_with_<peer>(instructions?, base?, model?, effort?, cwd?)` | Reviews the real repo state (`git status`, `git diff`, code, tests), not your summary. `base` adds commits since a branch or commit. |
 | `continue_<peer>(session_id, question, cwd?)` | Follow-up in the same peer session: push back, share your view, ask it to test something. |
+| `get_<peer>_result(job_id?, wait_sec?)` | Answer of a background job, or its status and elapsed time if still running. `wait_sec` (≤ 600) waits for it. No `job_id` lists jobs. |
+| `cancel_<peer>(job_id)` | Stops a background job and kills the peer. |
 
 Always pass `cwd`, the absolute path of the repository. For example:
 
@@ -72,6 +74,26 @@ ask_codex(question="Why does test_total fail after set_price()?",
 
 Each answer starts with `[codex · model=… · effort=… · 45s · session_id=…]`. A call takes from about 30s
 to several minutes, with a progress notification every 15s.
+
+### Background jobs
+
+`ask_`, `review_with_` and `continue_` accept `background=true`. The call returns a `job_id` immediately
+and the agent keeps working, then collects the answer:
+
+```
+review_with_codex(cwd="/abs/repo", background=true)        → job_id=job-1a2b3c4d
+... other work ...
+get_codex_result(job_id="job-1a2b3c4d", wait_sec=300)      → the review, or "still running after 412s"
+```
+
+Background jobs get `job_timeout_sec` (3600s) instead of `timeout_sec`, and each `get_…_result` call stays
+short, so the client's tool timeout no longer caps long reviews. On a job still running, the agent decides
+whether to wait more or `cancel_…` it. At most `max_jobs` (3) run at once. Finished jobs are forgotten after an
+hour, and all jobs die with the MCP server. The server cannot wake the agent up when a job ends: the agent
+has to come back for it.
+
+In Claude Code, a background subagent (`Agent` tool) that calls `ask_codex` is an alternative: Claude is
+notified when it finishes. It is still subject to the blocking timeouts.
 
 ## How the peer runs
 
@@ -85,7 +107,7 @@ to several minutes, with a progress notification every 15s.
 A peer can never call back (Claude → Codex → Claude …). As a second guard, peer processes get
 `DUO_MCP_PEER=1`, and a duo-mcp started under it exposes no tools.
 
-- **Timeout:** 900s by default. On timeout, cancellation or client shutdown, the peer's whole process group is killed.
+- **Timeout:** 900s for blocking calls, 3600s for background jobs. On timeout, cancellation or client shutdown, the peer's whole process group is killed.
 - **Output:** capped at 20,000 chars. CLI errors (auth, capacity, bad model) and permission denials are reported to the caller.
 - **Writes:** the Claude peer has no OS sandbox. The tests it may run can write files, caches at least.
   The Codex sandbox blocks all writes, so some test suites fail there.
@@ -97,7 +119,9 @@ A peer can never call back (Claude → Codex → Claude …). As a second guard,
 fall back to the CLI's own defaults. Per-call `model` and `effort` override them.
 
 ```toml
-timeout_sec = 900
+timeout_sec = 900        # blocking calls; keep below the client's tool timeout
+job_timeout_sec = 3600   # background jobs
+max_jobs = 3             # background jobs running at once
 max_output_chars = 20000
 # log_file = "~/.local/state/duo-mcp/duo-mcp.log"   # or DUO_MCP_DEBUG=1
 

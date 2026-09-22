@@ -176,7 +176,7 @@ async def run_process(argv: list[str], stdin: str, cwd: str, env: dict, timeout:
                 elapsed = time.monotonic() - started
                 if elapsed >= timeout:
                     raise PeerError(f"peer timed out after {timeout}s and was killed "
-                                    f"(raise timeout_sec in the duo-mcp config, or ask a narrower question)")
+                                    f"(ask a narrower question, or raise the timeout in the duo-mcp config)")
                 if heartbeat:
                     try:
                         await heartbeat(elapsed)
@@ -313,7 +313,8 @@ def parse_codex(code: int, out: Path, err: Path, last_msg: Path) -> tuple[str, s
 
 async def run_peer(cfg: Config, peer: str, prompt: str, cwd: str, model: str | None = None,
                    effort: str | None = None, resume: str | None = None,
-                   heartbeat: Callable[[float], Awaitable[None]] | None = None) -> PeerResult:
+                   heartbeat: Callable[[float], Awaitable[None]] | None = None,
+                   timeout: int | None = None) -> PeerResult:
     pc = cfg.claude if peer == "claude" else cfg.codex
     if resume and not SESSION_RE.match(resume):
         raise PeerError(f"invalid session_id {resume!r}")
@@ -331,7 +332,7 @@ async def run_peer(cfg: Config, peer: str, prompt: str, cwd: str, model: str | N
         log.info("start peer=%s cwd=%s model=%s effort=%s resume=%s prompt_chars=%d",
                  peer, cwd, model or "default", effort or "default", bool(resume), len(prompt))
         try:
-            code, out, err = await run_process(argv, prompt, cwd, env, cfg.timeout_sec, work, heartbeat)
+            code, out, err = await run_process(argv, prompt, cwd, env, timeout or cfg.timeout_sec, work, heartbeat)
             if peer == "claude":
                 text, session_id, used_model = parse_claude(code, out, err)
             else:

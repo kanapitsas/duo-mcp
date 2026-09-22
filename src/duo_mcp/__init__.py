@@ -39,7 +39,8 @@ def doctor() -> int:
     cfg = load_config()
     path = config_path()
     print(f"config: {path} ({'found' if path.exists() else 'not found, using defaults'})")
-    print(f"timeout_sec={cfg.timeout_sec} max_output_chars={cfg.max_output_chars}")
+    print(f"timeout_sec={cfg.timeout_sec} job_timeout_sec={cfg.job_timeout_sec} max_jobs={cfg.max_jobs} "
+          f"max_output_chars={cfg.max_output_chars}")
     for peer, pc in (("claude", cfg.claude), ("codex", cfg.codex)):
         print(f"\n[{peer}] model={pc.model or '(CLI default)'} effort={pc.effort or '(CLI default)'}")
         try:

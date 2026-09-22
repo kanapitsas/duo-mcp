@@ -1,8 +1,8 @@
 ## Peer review with Codex (duo-mcp)
 
 You can consult Codex, an independent agent from a different model family, with the `duo` MCP tools
-(`ask_codex`, `review_with_codex`, `continue_codex`). It investigates this repository without editing it and
-makes different mistakes than you do. Use it when:
+(`ask_codex`, `review_with_codex`, `continue_codex`, `get_codex_result`, `cancel_codex`).
+It investigates this repository without editing it and makes different mistakes than you do. Use it when:
 
 - an important decision is ambiguous, or several plausible explanations exist;
 - your confidence is low, or debugging is stuck;
@@ -14,6 +14,8 @@ How:
   question, only facts (errors, repro, paths) in `context`. Use `mode="debate"` or `continue_codex`
   afterwards if you want your own view challenged.
 - Always pass `cwd` (your working directory).
+- For long investigations or reviews, pass `background=true` and keep working; collect the answer with
+  `get_codex_result(job_id, wait_sec=...)` before you finish. If it runs longer than it is worth, `cancel_codex`.
 - Do not consult it for trivial or mechanical tasks.
 
 If you and Codex disagree: (1) state the exact point of disagreement; (2) inspect the code, tests and

@@ -44,7 +44,9 @@ class PeerConfig:
 
 @dataclass
 class Config:
-    timeout_sec: int = 900
+    timeout_sec: int = 900         # blocking calls (must stay below the client's own tool timeout)
+    job_timeout_sec: int = 3600    # background jobs (the client never waits on them)
+    max_jobs: int = 3              # background jobs running at once
     max_output_chars: int = 20000
     log_file: str = ""
     claude: PeerConfig = field(default_factory=lambda: PeerConfig(allowed_tools=list(DEFAULT_CLAUDE_ALLOWED_TOOLS)))
@@ -78,6 +80,8 @@ def load_config() -> Config:
     with path.open("rb") as f:
         raw = tomllib.load(f)
     cfg.timeout_sec = int(raw.get("timeout_sec", cfg.timeout_sec))
+    cfg.job_timeout_sec = int(raw.get("job_timeout_sec", cfg.job_timeout_sec))
+    cfg.max_jobs = int(raw.get("max_jobs", cfg.max_jobs))
     cfg.max_output_chars = int(raw.get("max_output_chars", cfg.max_output_chars))
     cfg.log_file = str(raw.get("log_file", cfg.log_file))
     cfg.claude = _peer(raw.get("claude", {}), cfg.claude, "claude")

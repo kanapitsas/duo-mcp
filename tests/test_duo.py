@@ -9,6 +9,9 @@ import pytest
 from duo_mcp import prompts
 from duo_mcp.config import Config
 from duo_mcp.peers import PeerError, run_peer
+from mcp.server.mcpserver import Context
+from mcp.server.mcpserver.exceptions import ToolError
+
 from duo_mcp.server import build_server
 
 FAKE = str(Path(__file__).with_name("fake_peer.py"))
@@ -138,6 +141,97 @@ def test_cancellation_kills_process(cfg, record, tmp_path, monkeypatch):
 
 def test_recursion_guard_exposes_no_tools(cfg, monkeypatch):
     names = lambda s: {t.name for t in s._tool_manager.list_tools()}
-    assert names(build_server("codex", cfg)) == {"ask_codex", "review_with_codex", "continue_codex"}
+    assert names(build_server("codex", cfg)) == {"ask_codex", "review_with_codex", "continue_codex",
+                                                 "get_codex_result", "cancel_codex"}
     monkeypatch.setenv("DUO_MCP_PEER", "1")
     assert names(build_server("codex", cfg)) == set()
+
+
+def tool(server):
+    async def call(name, **args):
+        return await server._tool_manager.call_tool(name, args, Context(mcp_server=server))
+    return call
+
+
+def job_id(text):
+    return text.split("job_id=")[1].split("]")[0]
+
+
+def test_background_job_returns_immediately_then_result(cfg, tmp_path):
+    async def go():
+        call = tool(build_server("codex", cfg))
+        started = await call("ask_codex", question="q", cwd=str(tmp_path), background=True)
+        jid = job_id(started)
+        assert "get_codex_result" in started
+        out = await call("get_codex_result", job_id=jid, wait_sec=20)
+        assert "fake answer" in out and "session_id=0199aaaa" in out
+        assert f"{jid}  ask_codex  done" in await call("get_codex_result")
+        # the session is known for follow-ups, like after a blocking call
+        again = await call("continue_codex", session_id="0199aaaa-bbbb-cccc-dddd-eeeeffff0000",
+                           question="more", background=True)
+        assert "fake answer" in await call("get_codex_result", job_id=job_id(again), wait_sec=20)
+    run(go())
+
+
+def test_background_job_status_limit_and_cancel(cfg, record, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_MODE", "sleep")
+    cfg.max_jobs = 1
+
+    async def go():
+        call = tool(build_server("codex", cfg))
+        jid = job_id(await call("review_with_codex", cwd=str(tmp_path), background=True))
+        t0 = time.monotonic()
+        status = await call("get_codex_result", job_id=jid, wait_sec=1)
+        assert "still running" in status and time.monotonic() - t0 < 5
+        with pytest.raises(ToolError, match="max_jobs=1"):
+            await call("ask_codex", question="q", cwd=str(tmp_path), background=True)
+        assert "cancelled" in await call("cancel_codex", job_id=jid)
+        with pytest.raises(ProcessLookupError):
+            os.kill(record()["pid"], 0)
+        with pytest.raises(ToolError, match="was cancelled"):
+            await call("get_codex_result", job_id=jid)
+    run(go())
+
+
+def test_background_job_uses_job_timeout(cfg, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_MODE", "sleep")
+    cfg.timeout_sec, cfg.job_timeout_sec = 1, 2
+
+    async def go():
+        call = tool(build_server("claude", cfg))
+        jid = job_id(await call("ask_claude", question="q", cwd=str(tmp_path), background=True))
+        with pytest.raises(ToolError, match="timed out after 2s"):
+            await call("get_claude_result", job_id=jid, wait_sec=20)
+    run(go())
+
+
+def test_stdio_shutdown_kills_background_peer(tmp_path, record, monkeypatch):
+    """Real MCP stdio: a job outlives its request, and closing the client kills the peer."""
+    import sys
+    import anyio
+    from mcp.client.session import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    conf = tmp_path / "config.toml"
+    conf.write_text(f'[codex]\ncommand = "{FAKE}"\n')
+    env = {**os.environ, "DUO_MCP_CONFIG": str(conf), "FAKE_MODE": "sleep"}
+    params = StdioServerParameters(command=sys.executable, args=["-m", "duo_mcp", "for-claude"], env=env)
+
+    async def go():
+        async with stdio_client(params) as streams, ClientSession(*streams) as s:
+            await s.initialize()
+            r = await s.call_tool("ask_codex", {"question": "q", "cwd": str(tmp_path), "background": True})
+            jid = job_id(r.content[0].text)
+            with anyio.move_on_after(1):  # a get_result request abandoned mid-wait
+                await s.call_tool("get_codex_result", {"job_id": jid, "wait_sec": 30})
+            r = await s.call_tool("get_codex_result", {"job_id": jid})
+            assert "still running" in r.content[0].text
+            os.kill(record()["pid"], 0)  # peer alive
+    anyio.run(go)
+    for _ in range(50):
+        try:
+            os.kill(record()["pid"], 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.2)
+    pytest.fail("peer still running after the MCP client closed")
