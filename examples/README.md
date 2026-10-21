@@ -12,7 +12,7 @@ Claude Code 2.1.273 and codex-cli 0.155.0-alpha.9.2.
 
 Setup: an uncommitted "fix" to `stale-cart` that fixes both bugs but also swaps `round(x, 2)` for
 `int(x * 100) / 100` ("faster on hot paths"). Both tests pass. The primary was `codex exec`, given the
-`AGENTS.md` snippet and the prompt "get them reviewed by Claude with review_with_claude, then verify each of
+[`AGENTS.md`](../snippets/AGENTS.md) snippet and the prompt "get them reviewed by Claude with review_with_claude, then verify each of
 Claude's findings yourself".
 
 Codex called `review_with_claude(cwd=…, instructions="…regressions, edge cases, whether the fix is complete")`.
@@ -47,7 +47,7 @@ It held its position on evidence (file:line plus the arithmetic of the observed 
 
 ## 3. Claude CLI → Codex, independent mode
 
-In `invoice-rounding/`, a `claude -p` primary with the `CLAUDE.md` snippet first wrote down **MY INITIAL VIEW**
+In `invoice-rounding/`, a `claude -p` primary with the [`CLAUDE.md`](../snippets/CLAUDE.md) snippet first wrote down **MY INITIAL VIEW**
 (float representation for `2.675`, ties-to-even for `0.125`, fix with `Decimal(str(x))` + `ROUND_HALF_UP`).
 It then called `ask_codex` **without** revealing that view. The question was neutral, and the context held only
 the file contents and the pytest failures. Codex (49s) independently reached the same two causes. It added one

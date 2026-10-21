@@ -59,9 +59,9 @@ Paste [`snippets/CLAUDE.md`](snippets/CLAUDE.md) into `~/.claude/CLAUDE.md` and
 
 | tool | what it does |
 |---|---|
-| `ask_<peer>(question, mode?, context?, model?, effort?, cwd?)` | New investigation. `mode="independent"` (default): neutral question, `context` holds facts only. `mode="debate"`: `context` holds your position, and the peer tries to break it. |
-| `review_with_<peer>(instructions?, base?, model?, effort?, cwd?)` | Reviews the real repo state (`git status`, `git diff`, code, tests), not your summary. `base` adds commits since a branch or commit. |
-| `continue_<peer>(session_id, question, cwd?)` | Follow-up in the same peer session: push back, share your view, ask it to test something. |
+| `ask_<peer>(question, mode?, context?, model?, effort?, cwd?, background?)` | New investigation. `mode="independent"` (default): neutral question, `context` holds facts only. `mode="debate"`: `context` holds your position, and the peer tries to break it. |
+| `review_with_<peer>(instructions?, base?, model?, effort?, cwd?, background?)` | Reviews the real repo state (`git status`, `git diff`, code, tests), not your summary. `base` adds commits since a branch or commit. |
+| `continue_<peer>(session_id, question, cwd?, background?)` | Follow-up in the same peer session: push back, share your view, ask it to test something. |
 | `get_<peer>_result(job_id?, wait_sec?)` | Answer of a background job, or its status and elapsed time if still running. `wait_sec` (≤ 600) waits for it. No `job_id` lists jobs. |
 | `cancel_<peer>(job_id)` | Stops a background job and kills the peer. |
 
