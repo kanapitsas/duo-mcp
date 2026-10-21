@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -216,6 +216,8 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp" },
+    { name = "mcp-types" },
+    { name = "pydantic" },
 ]
 
 [package.dev-dependencies]
@@ -224,7 +226,11 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mcp", specifier = ">=2.2.0" }]
+requires-dist = [
+    { name = "mcp", specifier = ">=2.2.0" },
+    { name = "mcp-types", specifier = ">=2.2.0" },
+    { name = "pydantic", specifier = ">=2" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]

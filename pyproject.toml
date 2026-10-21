@@ -9,6 +9,8 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=2.2.0",
+    "mcp-types>=2.2.0",  # imported directly (server.py)
+    "pydantic>=2",       # imported directly (server.py)
 ]
 
 [project.scripts]
