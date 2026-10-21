@@ -96,6 +96,21 @@ def test_invalid_effort_rejected(cfg, tmp_path):
         run(run_peer(cfg, "claude", "x", str(tmp_path), effort="bogus"))
 
 
+def test_malformed_effort_rejected(cfg, tmp_path):
+    # with no model cache entry codex efforts are not validated against a list; the format still is
+    with pytest.raises(PeerError, match="invalid effort"):
+        run(run_peer(cfg, "codex", "x", str(tmp_path), effort='high" x'))
+
+
+def test_parse_codex_skips_non_object_lines(tmp_path):
+    from duo_mcp.peers import parse_codex
+    out, err = tmp_path / "out", tmp_path / "err"
+    out.write_text('42\n"note"\n' + json.dumps({"type": "thread.started", "thread_id": "t-12345678"}) + "\n"
+                   + json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "hi"}}) + "\n")
+    err.write_text("")
+    assert parse_codex(0, out, err, tmp_path / "missing") == ("hi", "t-12345678", None)
+
+
 def test_model_allowlist(cfg, tmp_path):
     cfg.codex.allowed_models = ["a"]
     with pytest.raises(PeerError, match="allowed_models"):

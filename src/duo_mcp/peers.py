@@ -33,6 +33,7 @@ CANDIDATES = {
               HOME / ".local/bin/codex", Path("/opt/homebrew/bin/codex"), Path("/usr/local/bin/codex")],
 }
 SESSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{7,63}$")
+EFFORT_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")  # interpolated into a codex `-c` TOML string
 
 _active: set[int] = set()  # process-group ids of running peers
 
@@ -110,6 +111,8 @@ def resolve_model_effort(peer: str, pc: PeerConfig, binary: str, model: str | No
     effort = (effort or pc.effort or "").strip() or None
     if model and pc.allowed_models and model not in pc.allowed_models:
         raise PeerError(f"model {model!r} not in [{peer}].allowed_models {pc.allowed_models}")
+    if effort and not EFFORT_RE.match(effort):
+        raise PeerError(f"invalid effort {effort!r}: expected a level name such as low, medium or high")
     if effort:
         if peer == "claude":
             valid = claude_efforts(binary)
@@ -292,6 +295,8 @@ def parse_codex(code: int, out: Path, err: Path, last_msg: Path) -> tuple[str, s
             try:
                 ev = json.loads(line)
             except json.JSONDecodeError:
+                continue
+            if not isinstance(ev, dict):  # stray non-object JSON line (number, string...)
                 continue
             kind = ev.get("type")
             if kind == "thread.started":
