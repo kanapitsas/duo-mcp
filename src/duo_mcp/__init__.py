@@ -47,11 +47,14 @@ def doctor() -> int:
             binary = find_binary(peer, pc)
             ver = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=20).stdout.strip()
             print(f"  binary: {binary} ({ver})")
-        except PeerError as e:
+        except (PeerError, OSError, subprocess.SubprocessError) as e:
             print(f"  ERROR: {e}")
             continue
         if peer == "claude":
-            help_text = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=20).stdout
+            try:
+                help_text = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=20).stdout
+            except (OSError, subprocess.SubprocessError):
+                help_text = ""
             m = re.search(r"--model <model>\s+(.*?)\n  -", help_text, re.S)
             print(f"  models: {' '.join(m.group(1).split()) if m else '(see claude --help)'}")
             print(f"  efforts: {', '.join(claude_efforts(binary)) or '(could not parse claude --help)'}")
