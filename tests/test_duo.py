@@ -250,3 +250,46 @@ def test_stdio_shutdown_kills_background_peer(tmp_path, record, monkeypatch):
             return
         time.sleep(0.2)
     pytest.fail("peer still running after the MCP client closed")
+
+
+def test_config_reloaded_without_restart(tmp_path, monkeypatch):
+    """Editing config.toml applies to a running server (a session's server can live for days)."""
+    from duo_mcp.config import ConfigReloader
+    conf = tmp_path / "config.toml"
+    monkeypatch.setenv("DUO_MCP_CONFIG", str(conf))
+    conf.write_text('[codex]\nmodel = "old-model"\n')
+    get = ConfigReloader()
+    assert get().codex.model == "old-model"
+    conf.write_text('[codex]\nmodel = "the-new-model"\n')
+    assert get().codex.model == "the-new-model"
+    conf.write_text('[codex\nmodel = "broken-toml-x"\n')  # half-written file: keep the last good config
+    assert get().codex.model == "the-new-model"
+    conf.unlink()
+    assert get().codex.model == ""
+
+
+def test_stdio_server_picks_up_config_change(tmp_path, record):
+    """Regression: the server read its config once at startup and kept using a stale model."""
+    import sys
+    import anyio
+    from mcp.client.session import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    conf = tmp_path / "config.toml"
+    conf.write_text(f'[codex]\ncommand = "{FAKE}"\nmodel = "gpt-old"\n')
+    env = {**os.environ, "DUO_MCP_CONFIG": str(conf)}
+    params = StdioServerParameters(command=sys.executable, args=["-m", "duo_mcp", "for-claude"], env=env)
+
+    def model_arg():
+        argv = record()["argv"]
+        return argv[argv.index("-m") + 1]
+
+    async def go():
+        async with stdio_client(params) as streams, ClientSession(*streams) as s:
+            await s.initialize()
+            await s.call_tool("ask_codex", {"question": "q", "cwd": str(tmp_path)})
+            assert model_arg() == "gpt-old"
+            conf.write_text(f'[codex]\ncommand = "{FAKE}"\nmodel = "gpt-new-terra"\n')
+            await s.call_tool("ask_codex", {"question": "q", "cwd": str(tmp_path)})
+            assert model_arg() == "gpt-new-terra"
+    anyio.run(go)

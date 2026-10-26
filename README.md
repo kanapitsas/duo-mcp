@@ -116,7 +116,8 @@ A peer can never call back (Claude → Codex → Claude …). As a second guard,
 ## Configuration (optional)
 
 `~/.config/duo-mcp/config.toml`, or `$DUO_MCP_CONFIG`. Every key is optional. Unset `model` and `effort`
-fall back to the CLI's own defaults. Per-call `model` and `effort` override them.
+fall back to the CLI's own defaults. Per-call `model` and `effort` override them. The file is re-read when it changes,
+so edits apply to running sessions without a restart (`log_file` excepted; an invalid file keeps the previous config).
 
 ```toml
 timeout_sec = 900        # blocking calls; keep below the client's tool timeout

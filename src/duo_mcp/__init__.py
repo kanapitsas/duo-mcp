@@ -78,12 +78,12 @@ def main() -> None:
     if args.cmd == "doctor":
         sys.exit(doctor())
 
-    from .config import load_config
+    from .config import ConfigReloader
     from .peers import kill_all
     from .server import build_server
 
-    cfg = load_config()
-    setup_logging(cfg.log_file)
+    cfg = ConfigReloader()  # re-read at each call: editing the file applies without restarting sessions
+    setup_logging(cfg().log_file)
     atexit.register(kill_all)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # runs atexit -> kills peer process groups
     peer = "codex" if args.cmd == "for-claude" else "claude"

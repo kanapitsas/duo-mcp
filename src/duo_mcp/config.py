@@ -87,3 +87,37 @@ def load_config() -> Config:
     cfg.claude = _peer(raw.get("claude", {}), cfg.claude, "claude")
     cfg.codex = _peer(raw.get("codex", {}), cfg.codex, "codex")
     return cfg
+
+
+class ConfigReloader:
+    """Returns the current config, re-reading the file when it changes (mtime or size).
+
+    The server process lives as long as the client session, so the config must not be frozen at startup.
+    An unreadable or invalid file keeps the last good config. `log_file` is only applied at startup.
+    """
+
+    def __init__(self) -> None:
+        self._sig: tuple | None = None
+        self._cfg = Config()
+        self()
+
+    def _signature(self) -> tuple:
+        path = config_path()
+        try:
+            st = path.stat()
+        except OSError:
+            return (str(path), None)
+        return (str(path), st.st_mtime_ns, st.st_size)
+
+    def __call__(self) -> Config:
+        sig = self._signature()
+        if sig != self._sig:
+            try:
+                self._cfg = load_config()
+            except (OSError, ValueError, TypeError) as e:  # TOMLDecodeError is a ValueError
+                log.warning("config: %s unreadable, keeping the previous one: %s", config_path(), e)
+            else:
+                if self._sig is not None:
+                    log.info("config reloaded from %s", config_path())
+            self._sig = sig
+        return self._cfg

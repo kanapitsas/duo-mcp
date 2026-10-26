@@ -5,6 +5,7 @@ import logging
 import os
 import secrets
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
@@ -56,7 +57,9 @@ class Job:
         return (self.finished or time.monotonic()) - self.started
 
 
-def build_server(peer: str, cfg: Config) -> MCPServer:
+def build_server(peer: str, cfg: Config | Callable[[], Config]) -> MCPServer:
+    """`cfg` is a Config, or a callable returning the current one (read at each call)."""
+    get_cfg = cfg if callable(cfg) else (lambda: cfg)
     primary = "codex" if peer == "claude" else "claude"
     P, Me = NAMES[peer], NAMES[primary]
     server = MCPServer(
@@ -89,7 +92,7 @@ def build_server(peer: str, cfg: Config) -> MCPServer:
 
     async def consult(prompt: str, cwd: str, model, effort, resume=None, heartbeat=None, timeout=None) -> str:
         try:
-            r: PeerResult = await run_peer(cfg, peer, prompt, cwd, model, effort, resume, heartbeat, timeout)
+            r: PeerResult = await run_peer(get_cfg(), peer, prompt, cwd, model, effort, resume, heartbeat, timeout)
         except PeerError as e:
             hint = " Or run it with background=true." if timeout is None and "timed out" in str(e) else ""
             raise ToolError(f"{peer} peer failed: {e}{hint}") from None
@@ -108,13 +111,14 @@ def build_server(peer: str, cfg: Config) -> MCPServer:
 
     def start_job(tool: str, prompt: str, cwd: str, model, effort, resume=None) -> str:
         prune()
+        c = get_cfg()
         running = sum(1 for j in jobs.values() if not j.task.done())
-        if running >= cfg.max_jobs:
-            raise ToolError(f"{running} {peer} jobs already running (max_jobs={cfg.max_jobs}). "
+        if running >= c.max_jobs:
+            raise ToolError(f"{running} {peer} jobs already running (max_jobs={c.max_jobs}). "
                             f"Collect or cancel one first (get_{peer}_result / cancel_{peer}).")
         jid = f"job-{secrets.token_hex(4)}"
         # No MCP context here: the request that started the job is over by the time the peer answers.
-        task = asyncio.create_task(consult(prompt, cwd, model, effort, resume, timeout=cfg.job_timeout_sec))
+        task = asyncio.create_task(consult(prompt, cwd, model, effort, resume, timeout=c.job_timeout_sec))
         job = jobs[jid] = Job(jid, tool, task, time.monotonic())
 
         def finished(t: asyncio.Task) -> None:
@@ -125,7 +129,7 @@ def build_server(peer: str, cfg: Config) -> MCPServer:
         task.add_done_callback(finished)
         log.info("job %s started (%s)", jid, tool)
         return (f"[{peer} · background job_id={jid}]\n\nStarted {tool} in the background (limit "
-                f"{cfg.job_timeout_sec}s). Keep working, then collect the answer with "
+                f"{c.job_timeout_sec}s). Keep working, then collect the answer with "
                 f"get_{peer}_result(job_id=\"{jid}\", wait_sec=...). Collect it before you finish your task.")
 
     async def run(ctx: Context, tool: str, background: bool, prompt: str, cwd: str, model, effort, resume=None) -> str:
@@ -222,7 +226,7 @@ def build_server(peer: str, cfg: Config) -> MCPServer:
         status = job.status()
         if status == "running":
             return (f"{job_id} ({job.tool}) still running after {job.elapsed():.0f}s "
-                    f"(limit {cfg.job_timeout_sec}s). Wait again with get_{peer}_result, "
+                    f"(limit {get_cfg().job_timeout_sec}s). Wait again with get_{peer}_result, "
                     f"or stop it with cancel_{peer}(job_id=\"{job_id}\").")
         if status == "cancelled":
             raise ToolError(f"{job_id} was cancelled after {job.elapsed():.0f}s")
